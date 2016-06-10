@@ -6,7 +6,7 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_PREFIX_PATH "/home/aurora/software/Qt5.3.2/5.3/gcc_64/")
 find_package(Qt5Widgets REQUIRED)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${Qt5Widgets_EXECUTABLE_COMPILE_FLAGS}")
-set(SOURCE_FILES main.cpp mainwindow.cpp)
+set(SOURCE_FILES main.cpp mainwindow.cpp Histogram1D.cpp Histogram1D.h)
 
 add_subdirectory(mstar)
 include_directories(/usr/local)

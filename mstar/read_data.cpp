@@ -36,7 +36,7 @@
 #endif
 
 /* Function declarations... */
-extern char          *read_switch();
+//extern char          *read_switch();
 //static float          byteswap_SR_IR();
 //static unsigned short byteswap_SUS_IUS();
 //static int            CheckByteOrder();
@@ -121,7 +121,7 @@ int CheckByteOrder(void)
  * Desc: Read_Mstar data file.    *
  **********************************/
 
-void read_mstar(const char* MSTARname, const char* JPEGname, int HDRflag, int ENHANCEflag, int VERBOSEflag, int qfactor)
+unsigned char* read_mstar(const char* MSTARname, const char* JPEGname, int HDRflag, int ENHANCEflag, int VERBOSEflag, int qfactor)
 {
     // parameters description
     // MSTARname=NULL;            /* Ptr to input MSTAR filename...   */
@@ -140,8 +140,8 @@ void read_mstar(const char* MSTARname, const char* JPEGname, int HDRflag, int EN
     FILE *HDRfp=NULL;                /* Ptr to (opt.) output Header file */
     FILE *JPEGfp=NULL;               /* Ptr to output JPEG file          */
 
-    unsigned char *pic8;             /* Ptr to 8-bit image buffer...     */
-    unsigned char *phase8;             /* Ptr to 8-bit image buffer for phase...     */
+    unsigned char *pic8, *rpic8;             /* Ptr to 8-bit image buffer...     */
+    unsigned char *phase8, *rphase8;             /* Ptr to 8-bit image buffer for phase...     */
 
     int   i, j, w, h, h2, numgot;
 
@@ -461,28 +461,27 @@ void read_mstar(const char* MSTARname, const char* JPEGname, int HDRflag, int EN
             CHIPdata = (float *) malloc(bytesPerImage);
             if (CHIPdata == (float *) NULL)
             {
-                fprintf(stderr,
-                        "Error: Unable to malloc CHIP memory!\n");
+                fprintf(stderr, "Error: Unable to malloc CHIP memory!\n");
                 fclose(MSTARfp);
                 exit(1);
             }
 
-            pic8 = (unsigned char *) calloc((size_t) w * h, (size_t) 1);
+            pic8 = (unsigned char *) calloc((size_t) w * h , (size_t) 1);
+            rpic8 = (unsigned char *) calloc((size_t) (w * h + 2), (size_t) 1);
             if (pic8 == (unsigned char *) NULL)
             {
-                fprintf(stderr,
-                        "Error: Unable to malloc output 8-bit memory!\n");
+                fprintf(stderr, "Error: Unable to malloc output 8-bit memory!\n");
                 fclose(MSTARfp);
                 free(CHIPdata);
                 exit(1);
             }
 
             // read phase data
-            phase8 = (unsigned char *) calloc((size_t) w * h, (size_t) 1);
+            phase8 = (unsigned char *) calloc((size_t) (w * h +2), (size_t) 1);
+            rphase8 = (unsigned char *) calloc((size_t) w * h , (size_t) 1);
             if (phase8 == (unsigned char *) NULL)
             {
-                fprintf(stderr,
-                        "Error: Unable to malloc output 8-bit memory!\n");
+                fprintf(stderr, "Error: Unable to malloc output 8-bit memory!\n");
                 fclose(MSTARfp);
                 free(CHIPdata);
                 exit(1);
@@ -530,21 +529,31 @@ void read_mstar(const char* MSTARname, const char* JPEGname, int HDRflag, int EN
             frange = fmax - fmin;
             fscale = 255.0 / frange;
 
+            rpic8[0] = h;
+            rpic8[1] = w;
+
+
+
             for (i = 0; i < nchunks; i++)
             {
                 f1 = CHIPdata[i] - fmin;
                 f2 = f1 * fscale;
                 pic8[i] = (unsigned char) (f2 + 0.5);
+                rpic8[i+2] = (unsigned char) (f2 + 0.5);
             }
-
             fmax = 0.0;
             fmin = 100000.0;
+            rphase8[0] = h;
+            rphase8[1] = w;
             for (i = nchunks; i < 2*nchunks; i++)
             {
                 fmax = MAX(CHIPdata[i], fmax);
                 fmin = MIN(CHIPdata[i], fmin);
                 phase8[i-nchunks] = (unsigned char) CHIPdata[i];
+                rphase8[i-nchunks+2] = (unsigned char) CHIPdata[i];
             }
+
+
             free(CHIPdata);
             break;
 
@@ -722,12 +731,14 @@ void read_mstar(const char* MSTARname, const char* JPEGname, int HDRflag, int EN
             if (f1 > 255.0)
             {
                 pic8[i] = 255;
+                rpic8[i+2] = 255;
             } else
             {
                 pic8[i] = (unsigned char) (f1 + 0.5);
+                rpic8[i+2] = (unsigned char) (f1 + 0.5);
             }
         }
-
+//        std::cout<< (int)pic8[0] << ", "<< (int) pic8[3] <<std::endl;
     }
 
 /************* MAIN JPEG PROCESSING AREA ********************/
@@ -821,5 +832,5 @@ void read_mstar(const char* MSTARname, const char* JPEGname, int HDRflag, int EN
         printf("\nMSTAR to JPEG conversion: completed!\n\n");
     }
 
-    exit(0);
+    return rpic8;
 }
