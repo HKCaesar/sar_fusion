@@ -40,6 +40,9 @@
 #include "otbImageFileReader.h"
 #include "otbImageFileWriter.h"
 #include "itkGradientMagnitudeImageFilter.h"
+//#include "itkImageIterator.h"
+#include "itkImageRegionIterator.h"
+
 
 //int main(int argc, char * argv[])
 //{
@@ -134,6 +137,9 @@ int main(int argc, char * argv[])
 
   typedef itk::RescaleIntensityImageFilter<InternalImageType, OutputImageType> RescalerType;
 
+  typedef itk::ImageRegionIterator<InternalImageType> ConstIteratorType;
+  typedef itk::ImageRegionIterator<InternalImageType> IteratorType;
+
   ReaderType::Pointer reader = ReaderType::New();
   FilterType::Pointer filter = FilterType::New();
   FilterType::SizeType Radius;
@@ -144,12 +150,34 @@ int main(int argc, char * argv[])
 
   reader->SetFileName(argv[1]);
   writer->SetFileName(argv[2]);
-
   filter->SetInput(reader->GetOutput());
-  Radius[0] = 2;
-  Radius[1] = 2;
+
+//  reader->Update();
+//  InternalImageType::Pointer img_iter = reader->GetOutput();
+//  ConstIteratorType constIterator(img_iter, img_iter->GetRequestedRegion());
+//  int count = 0;
+//  for(constIterator.GoToBegin();!constIterator.IsAtEnd();++constIterator){
+//    std::cout<<constIterator.Get()<< std::endl;
+//    count++;
+//  }
+//  std::cout<<count;
+
+  Radius[0] = 1;
+  Radius[1] = 1;
   filter->SetRadius(Radius);
   filter->Update();
+
+  InternalImageType::Pointer img_iter = filter->GetOutput();
+  ConstIteratorType constIterator(img_iter, img_iter->GetRequestedRegion());
+  IteratorType iterator(img_iter, img_iter->GetRequestedRegion());
+//  itk::ImageIterator<OutputImageType> it(img_output, img_output->GetRequestedRegion());
+  int count = 0;
+  for(constIterator.GoToBegin();!constIterator.IsAtEnd();++constIterator){
+      std::cout<<constIterator.Get()<< std::endl;
+      count++;
+  }
+  std::cout<<count;
+
 
   rescaler->SetInput(filter->GetOutput());
   writer->SetInput(rescaler->GetOutput());
