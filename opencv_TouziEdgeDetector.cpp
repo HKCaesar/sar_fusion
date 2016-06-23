@@ -5,6 +5,21 @@
 #include "opencv2/opencv.hpp"
 #include "opencv2/xfeatures2d.hpp"
 #include <string.h>
+#include <map>
+#include <list>
+#include <set>
+#include <math.h>
+#include <algorithm>
+#include <array>
+#include <cassert>
+#include <chrono>
+#include <cmath>
+#include <iterator>
+#include <memory>
+#include <random>
+#include <unordered_map>
+#include <vector>
+
 
 using namespace std;
 
@@ -13,7 +28,19 @@ const double CONST_PI_2 =     1.57079632679489661923;  /* pi/2 */
 const double CONST_PI_4 =     0.78539816339744830962;  /* pi/4 */
 const double CONST_PI_8 =     0.39269908169872415481;  /* pi/8 */
 const double THRESHOLD = 0.3;
+const double TR_THRESHOLE = 2;
 
+
+#define show_space() \
+    std::cout<<"========================================================================="<<std::endl;
+
+struct spixel{
+    int x_left;
+    int y_left;
+    int height;
+    int width;
+    int weight;
+};
 
 void display_img(const cv::Mat& image){
 //    cout << "in display_img rows="<<image.rows << " cols="<<image.cols<< endl;
@@ -48,10 +75,31 @@ void display_img_double(const cv::Mat& image){
     }
 }
 
+void display_img_int(const cv::Mat& image){
+//    cout << "in display_img rows="<<image.rows << " cols="<<image.cols<< endl;
+    for(int i = 0; i < image.rows; i++){
+        const int* datas = image.ptr<int>(i);
+        for(int j = 0; j < image.cols; j++){
+            cout<<(int)datas[j]<<", ";
+        }
+        cout<<endl;
+    }
+}
+
 void init_mat(cv::Mat& image){
 //    cout << "in display_img rows="<<image.rows << " cols="<<image.cols<< endl;
     for(int i = 0; i < image.rows; i++){
         uchar* datas = image.ptr<uchar>(i);
+        for(int j = 0; j < image.cols; j++){
+            datas[j] = 0;
+        }
+    }
+}
+
+void init_mat_double(cv::Mat& image){
+//    cout << "in display_img rows="<<image.rows << " cols="<<image.cols<< endl;
+    for(int i = 0; i < image.rows; i++){
+        double* datas = image.ptr<double>(i);
         for(int j = 0; j < image.cols; j++){
             datas[j] = 0;
         }
@@ -280,7 +328,7 @@ bool contain_edge(const cv::Mat& img_edge, int x_left, int y_left, int height, i
 void fillin(cv::Mat& img_edge, int x_left, int y_left, int height, int width, int values){
     for(int i = x_left; i<x_left+height; i++){
         for(int j=y_left; j<y_left+width; j++){
-            img_edge.at<uchar>(i, j) = values;
+            img_edge.at<double>(i, j) = values;
         }
     }
 }
@@ -296,6 +344,36 @@ void contain_one_count(const cv::Mat& img_edge){
     }
     cout<<value<<endl;
 }
+
+int contain_non_zero(const cv::Mat& img_edge){
+    int value = 0;
+    for(int i = 0; i<img_edge.rows; i++){
+        for(int j=0; j<img_edge.cols; j++){
+            if(img_edge.at<double>(i, j)>0){
+//                cout<< "index of non-zero is ==="<< i << " ===="<<j<<endl;
+                value++;
+            }
+        }
+    }
+//    cout<<value<<endl;
+    return value;
+}
+
+
+int contain_non_zero_uchar(const cv::Mat& img_edge){
+    int value = 0;
+    for(int i = 0; i<img_edge.rows; i++){
+        for(int j=0; j<img_edge.cols; j++){
+            if(img_edge.at<uchar>(i, j)>0){
+//                cout<< "index of non-zero is ==="<< i << " ===="<<j<<endl;
+                value++;
+            }
+        }
+    }
+//    cout<<value<<endl;
+    return value;
+}
+
 
 
 void normalize(const cv::Mat& img_edge, cv::Mat& img_dst, int totalcount){
@@ -321,15 +399,551 @@ void reverse_mat_value(cv::Mat& image){
     int temp = 0;
     for(int i = 0; i < image.rows; i++){
         for(int j = 0; j < image.cols; j++){
-            temp = (int)image.at<uchar>(i, j);
+            temp = image.at<double>(i, j);
             if(temp!=0){
-                image.at<uchar>(i, j) = 0;
+                image.at<double>(i, j) = 0;
             }else{
-                image.at<uchar>(i, j) = 1;
+                image.at<double>(i, j) = 1;
             }
         }
     }
 }
+
+void fill_struct(spixel& pix, int x_l, int x_r, int h, int w, int value){
+    pix.x_left = x_l;
+    pix.y_left = x_r;
+    pix.height = h;
+    pix.width = w;
+    pix.weight = value;
+}
+
+void show_map(map<int, spixel>& map_region){
+    for(map<int, spixel>::iterator iElement = map_region.begin(); iElement!=map_region.end();++iElement){
+        cout<<iElement->first<<" -> x_left: "<<iElement->second.x_left<<" y_left: "<<iElement->second.y_left
+        <<" height: "<<iElement->second.height<<" width: "<<iElement->second.width<<" weight: "<<iElement->second.weight<<endl;
+    }
+}
+
+void show_set(set<int> values){
+    for(set<int>::iterator iElement = values.begin(); iElement!=values.end(); iElement++){
+        cout<<*iElement<<" , ";
+    }
+    cout<<endl;
+}
+
+set<int> search_neghbors(const cv::Mat& imgs, const map<int, spixel>& regions, int weight){
+    set<int> neghbors;
+    spixel pix_info;
+    map<int, spixel>::const_iterator pix_iter = regions.find(weight);
+    pix_info = pix_iter->second;
+    int rows = pix_info.x_left + pix_info.height;
+    int cols = pix_info.y_left + pix_info.width;
+    int pix_val = 0;
+    for(int i=pix_info.x_left; i<(pix_info.x_left+pix_info.height); i++){
+        pix_val = (int)imgs.at<double>(i, cols);
+        if((pix_val-pix_info.weight)!=0){
+            neghbors.insert(pix_val);
+        }
+    }
+    for(int i=pix_info.y_left; i<(pix_info.y_left+pix_info.width); i++){
+        pix_val = (int)imgs.at<double>(rows, i);
+        if((pix_val-pix_info.weight)!=0){
+            neghbors.insert(pix_val);
+        }
+    }
+    return neghbors;
+}
+
+
+void copy_double_uchar(cv::Mat src, cv::Mat dst){
+    for(int i=0; i<src.rows; i++){
+        for(int j=0; j<src.cols; j++){
+            dst.at<uchar>(i,j) = src.at<double>(i, j);
+        }
+    }
+}
+
+//void generate_total_neghbors(const cv::Mat &img_region, int segmentVal){
+//    for(int i=0; i<segmentVal; i++){
+//        set<int> neghbors;
+//        spixel pix_info;
+//        map<int, spixel>::const_iterator pix_iter = regions.find(weight);
+//        pix_info = pix_iter->second;
+//        int rows = pix_info.x_left + pix_info.height;
+//        int cols = pix_info.y_left + pix_info.width;
+//        int pix_val = 0;
+//        for(int i=pix_info.x_left; i<(pix_info.x_left+pix_info.height); i++){
+//            pix_val = (int)imgs.at<double>(i, cols);
+//            if((pix_val-pix_info.weight)!=0){
+//                neghbors.insert(pix_val);
+//            }
+//        }
+//        for(int i=pix_info.y_left; i<(pix_info.y_left+pix_info.width); i++){
+//            pix_val = (int)imgs.at<double>(rows, i);
+//            if((pix_val-pix_info.weight)!=0){
+//                neghbors.insert(pix_val);
+//            }
+//        }
+//        return neghbors;
+//    }
+//}
+
+cv::Mat generate_trval(const cv::Mat &img_region, const cv::Mat& img_input, int segmentVal){
+    show_space();
+    show_space();
+    cv::Mat img_region1(img_region.size(), img_region.type());
+    cv::Mat img_region2(img_region.size(), img_region.type());
+    cv::Mat img_mask(img_region.size(), CV_8U);
+    cv::Mat tr_val(segmentVal, segmentVal, CV_64FC1);
+    init_mat_double(tr_val);
+    double u0 = 0.0;
+    double u01 = 0.0;
+    double u02 = 0.0;
+    double u1 = 0.0;
+    double u2 = 0.0;
+    double u4 = 0.0;
+    double etasc = 0.0;
+    double tr = 0.0;
+    int N1 = 0;
+    int N2 = 0;
+    int N = 0;
+    int n_covert = 0;
+
+//    double tr_val[segmentVal][segmentVal];
+
+    for(int i=0; i < segmentVal; i++){
+        n_covert = 0;
+        N1 = 0;
+        u1 = 0;
+        u01 = 0;
+        init_mat(img_mask);
+
+        img_region.copyTo(img_region1);
+//        display_img_double(img_region1);
+        // caculate region1 u1 and n1
+        img_region1 = img_region1 - i;
+//        display_img_double(img_region1);
+        reverse_mat_value(img_region1);
+//        display_img_double(img_region1);
+        N1 = contain_non_zero(img_region1);
+//        cout<< img_region.type()<<" ================================"<<img_region.size<<endl;
+        copy_double_uchar(img_region1, img_mask);
+//        display_img(img_mask);
+        n_covert = contain_non_zero_uchar(img_mask);
+        if(N1!=n_covert){
+            cout<<"error error error error error error error error error error error error error error error error error error line 701";
+        }
+        u1 = cv::mean(img_input,img_mask)(0);
+        u01 = u1*N1;
+
+        for(int j=0; j<segmentVal; j++){
+            if(i==j){
+                continue;
+            }
+            img_region.copyTo(img_region2);
+            init_mat(img_mask);
+            u2 = 0.0;
+            u02 = 0.0;
+            u0 = 0.0;
+            N = 0;
+            N2 = 0;
+            tr = 0.0;
+            u4 = 0.0;
+//            display_img_double(img_region2);
+            img_region2 = img_region2 - j;
+//            display_img_double(img_region2);
+            reverse_mat_value(img_region2);
+//            display_img_double(img_region2);
+            N2 = contain_non_zero(img_region2);
+//            cout<< img_region.type()<<" ================================"<<img_region.size<<endl;
+            copy_double_uchar(img_region2, img_mask);
+//            display_img(img_mask);
+            n_covert = contain_non_zero_uchar(img_mask);
+            if(N2!=n_covert){
+                cout<<"error error error error error error error error error error error error error error error error error error line 701";
+            }
+//            display_img(img_input);
+            u2 = cv::mean(img_input,img_mask)(0);
+            u02 = u2*N2;
+            u0 = u01 + u02;
+            N = N1+N2;
+            u4 = u0/N;
+            tr = -N1*log(u1) - N2*log(u2) + (N1+N2)*log(u4);
+            tr_val.at<double>(i, j) = tr;
+        }
+    }
+//    return tr_val;
+//    display_img_double(tr_val);
+    return tr_val;
+}
+
+
+
+
+//2016-6-23
+double square( double a )
+{
+    return a*a;
+}
+
+
+double diff( const cv::Mat &img, int x1, int y1, int x2, int y2 )
+{
+//    double result = img.at<double>( y1, x1 ) - img.at<double>( y2, x2 );
+//    if(result){
+//        cout<< "x1: "<< x1<<" y1: "<<y1<< "x2: "<< x2 <<" y2: "<< y2 <<" and the value is ==="<< result<< endl;
+//    }
+    return img.at<double>( y1, x1 ) - img.at<double>( y2, x2 );
+}
+
+struct UniverseElement
+{
+    int rank;
+    int p;
+    int size;
+
+    UniverseElement() : rank( 0 ), size( 1 ), p( 0 ) {}
+    UniverseElement( int rank, int size, int p ) : rank( rank ), size( size ), p( p ) {}
+};
+
+
+class Universe
+{
+private:
+    vector<UniverseElement> elements;
+    int num;
+
+public:
+    Universe( int num ) : num( num )
+    {
+        elements.reserve( num );
+
+        for ( int i = 0; i < num; i++ )
+        {
+            elements.emplace_back( 0, 1, i );
+        }
+    }
+
+    ~Universe() {}
+
+    int find( int x )
+    {
+        int y = x;
+        while ( y != elements[y].p )
+        {
+            y = elements[y].p;
+        }
+        elements[x].p = y;
+
+        return y;
+    }
+
+    void join( int x, int y )
+    {
+        if ( elements[x].rank > elements[y].rank )
+        {
+            elements[y].p = x;
+            elements[x].size += elements[y].size;
+        }
+        else
+        {
+            elements[x].p = y;
+            elements[y].size += elements[x].size;
+            if ( elements[x].rank == elements[y].rank )
+            {
+                elements[y].rank++;
+            }
+        }
+        num--;
+    }
+
+    int size( int x ) const { return elements[x].size; }
+    int numSets() const { return num; }
+};
+
+
+struct edge
+{
+    int a;
+    int b;
+    double w;
+};
+
+void show_edge_info(vector<edge>& values){
+    for(vector<edge>::iterator iElement = values.begin(); iElement!=values.end(); iElement++){
+        cout<<" the first point: "<<(*iElement).a<<" second point: "<<(*iElement).b
+        <<" weight: "<<(*iElement).w<<endl;
+
+    }
+    cout<<endl;
+}
+
+
+bool operator<( const edge &a, const edge &b )
+{
+    return a.w < b.w;
+}
+
+//caculate two different pixel's similarity
+shared_ptr<Universe> segmentGraph( int numVertices, int numEdges, vector<edge> &edges)
+{
+//    sort( edges.begin(), edges.end() );
+    auto universe = make_shared<Universe>( numVertices );
+    for ( auto &pedge : edges )
+    {
+        int a = universe->find( pedge.a );
+        int b = universe->find( pedge.b );
+
+        if ( a != b )
+        {
+            if (  pedge.w == 0  )
+            {
+                universe->join( a, b );
+            }
+        }
+    }
+
+    return universe;
+}
+
+// image segmentation using "Efficient Graph-Based Image Segmentation"
+shared_ptr<Universe> segmentation( const cv::Mat &blurred)
+{
+    const int width = blurred.cols;
+    const int height = blurred.rows;
+    std::vector<edge> edges( width*height * 4 );
+
+    //build edge relations
+    int num = 0;
+    int total = 0;
+    for ( int y = 0; y < height; y++ )
+    {
+        for ( int x = 0; x < width; x++ )
+        {
+            if ( x < width - 1 )
+            {
+                edges[num].a = y * width + x;
+                edges[num].b = y * width + ( x + 1 );
+                double result = diff( blurred, x, y, x + 1, y );
+//                if(result!=0){
+//                    cout<< "a, "<<edges[num].a<<"  and b, value is "<<edges[num].b<<" the result is "<<result<<endl;
+//                    total++;
+//                }
+                edges[num].w = diff( blurred, x, y, x + 1, y );
+                num++;
+            }
+
+            if ( y < height - 1 )
+            {
+                edges[num].a = y * width + x;
+                edges[num].b = ( y + 1 ) * width + x;
+                edges[num].w = diff( blurred, x, y, x, y + 1 );
+                double result = diff( blurred, x, y, x + 1, y );
+//                if(result!=0){
+//                    cout<< "a, "<<edges[num].a<<"  and b, value is "<<edges[num].b<<" the result is "<<result<<endl;
+//                    total++;
+//                }
+                num++;
+            }
+
+            if ( ( x < width - 1 ) && ( y < height - 1 ) )
+            {
+                edges[num].a = y * width + x;
+                edges[num].b = ( y + 1 ) * width + ( x + 1 );
+                edges[num].w = diff( blurred, x, y, x + 1, y + 1 );
+                double result = diff( blurred, x, y, x + 1, y );
+//                if(result!=0){
+//                    cout<< "a, "<<edges[num].a<<"  and b, value is "<<edges[num].b<<" the result is "<<result<<endl;
+//                    total++;
+//                }
+                num++;
+            }
+
+            if ( ( x < width - 1 ) && ( y > 0 ) )
+            {
+                edges[num].a = y * width + x;
+                edges[num].b = ( y - 1 ) * width + ( x + 1 );
+                edges[num].w = diff( blurred, x, y, x + 1, y - 1 );
+                double result = diff( blurred, x, y, x + 1, y );
+//                if(result!=0){
+//                    cout<< "a, "<<edges[num].a<<"  and b, value is "<<edges[num].b<<" the result is "<<result<<endl;
+//                    total++;
+//                }
+                num++;
+            }
+        }
+    }
+    auto universe = segmentGraph( width*height, num, edges);
+//    Universe univer = *universe;
+
+//    for ( int i = 0; i < num; i++ )
+//    {
+//        int a = universe->find( edges[i].a );
+//        int b = universe->find( edges[i].b );
+//        if ( ( a != b ) && ( ( universe->size( a ) < minSize ) || ( universe->size( b ) < minSize ) ) )
+//        {
+//            universe->join( a, b );
+//        }
+//    }
+//    show_space();
+//    show_space();
+//    show_edge_info(edges);
+    return universe;
+}
+
+
+//region operations
+struct Region
+{
+    int size;
+    int parent_label;
+    cv::Rect rect;
+    std::vector<int> labels;
+    std::vector<cv::Point> pixels;
+    int total_pixel;
+    Region() {}
+
+    Region( const cv::Rect &rect, int label ) : rect( rect )
+    {
+        labels.push_back( label );
+    }
+
+    Region(
+            const cv::Rect &rect, int size,
+            const std::vector<int> &&labels
+    )
+            : rect( rect ), size( size ), labels( std::move( labels ) )
+    {}
+
+    Region& operator=( const Region& region ) = default;
+
+    Region& operator=( Region&& region ) noexcept
+    {
+        if ( this != &region )
+        {
+            this->size = region.size;
+            this->rect = region.rect;
+            this->labels = std::move( region.labels );
+        }
+
+        return *this;
+    }
+
+    Region( Region&& region ) noexcept
+    {
+        *this = std::move( region );
+    }
+};
+
+
+std::map<int, Region> extractRegions( const cv::Mat &img, std::shared_ptr<Universe> universe )
+{
+    std::map<int, Region> R;
+
+    for ( int y = 0; y < img.rows; y++ )
+    {
+        for ( int x = 0; x < img.cols; x++ )
+        {
+            int label = universe->find( y*img.cols + x );
+
+            if ( R.find( label ) == R.end() )
+            {
+                R[label] = Region( cv::Rect( 100000, 100000, 0, 0 ), label );
+            }
+
+            R[label].pixels.push_back(cv::Point(x, y));
+
+            if ( R[label].rect.x > x )
+            {
+                R[label].rect.x = x;
+            }
+
+            if ( R[label].rect.y > y )
+            {
+                R[label].rect.y = y;
+            }
+            // the bottom right corner
+            if ( R[label].rect.br().x < x )
+            {
+                R[label].rect.width = x - R[label].rect.x + 1;
+            }
+
+            if ( R[label].rect.br().y < y )
+            {
+                R[label].rect.height = y - R[label].rect.y + 1;
+            }
+        }
+    }
+
+//    cv::Mat gradient = calcTextureGradient( img );
+//
+//    cv::Mat hsv;
+//    cv::cvtColor( img, hsv, cv::COLOR_BGR2HSV );
+//
+//    for ( auto &labelRegion : R )
+//    {
+//        labelRegion.second.size = calcSize( img, universe, labelRegion.first );
+//        labelRegion.second.colourHist = calcColourHist( hsv, universe, labelRegion.first );
+//        labelRegion.second.textureHist = calcTextureHist( img, gradient, universe, labelRegion.first );
+//    }
+
+    return R;
+}
+
+
+using LabelRegion = std::pair<int, Region>;
+using Neighbour = std::pair<int, int>;
+
+bool isIntersecting( const Region &a, const Region &b )
+{
+    Region temp;
+    temp.rect.x = a.rect.x;
+    temp.rect.y = a.rect.y;
+    temp.rect.width = a.rect.width + 1;
+    temp.rect.height = a.rect.height + 1;
+    return ( ( temp.rect & b.rect ).area() != 0 );
+}
+
+void visualize( const cv::Mat &img, std::shared_ptr<Universe> universe )
+{
+    const int height = img.rows;
+    const int width = img.cols;
+    std::vector<cv::Vec3b> colors;
+
+    cv::Mat segmentated( height, width, CV_8UC3 );
+
+    std::random_device rnd;
+    std::mt19937 mt( rnd() );
+    std::uniform_int_distribution<> rand256( 0, 255 );
+
+    for ( int i = 0; i < height*width; i++ )
+    {
+//        cv::Vec3b color( rand256( mt ), rand256( mt ), rand256( mt ) );
+//        colors.push_back( color );
+    }
+
+    for ( int y = 0; y < height; y++ )
+    {
+        for ( int x = 0; x < width; x++ )
+        {
+            segmentated.at<cv::Vec3b>( y, x ) = colors[universe->find( y*width + x )];
+        }
+    }
+//    cv::imwrite("/home/auroua/sassi.jpg", segmentated);
+    cv::imshow( "Initial Segmentation Result", segmentated );
+    cv::waitKey( 1 );
+}
+
+shared_ptr<Universe> generateSegments( const cv::Mat &img)
+{
+    auto universe = segmentation(img);
+
+//    visualize( img, universe );
+
+    return universe;
+}
+
+
 
 int main(){
     // range from 3 to 15
@@ -350,11 +964,11 @@ int main(){
     cv::Mat img_output(size, type);
     cv::Mat img_touiz(size, CV_64FC1);
     cv::Mat img_edge(size, type);
-    cv::Mat img_region(size, CV_8S);
+    cv::Mat img_region(size, CV_64FC1);
     init_mat(img_output);
     init_mat(img_touiz);
     init_mat(img_edge);
-    init_mat(img_region);
+    init_mat_double(img_region);
     // store the n value of input pixel, the scale information
     cv::Mat img_n_val(size, CV_8U);
     int height = img_input.rows;
@@ -461,7 +1075,7 @@ int main(){
 
     // caculate obt touziedge
 //    caculate_touziEdge(img_input, 1);
-//    double values = caculate_touziEdge_pixel(img_input, 1, 1, 1);
+//    double values = caculate_toufloodFillziEdge_pixel(img_input, 1, 1, 1);
 //    cout<< values<< endl;
     unsigned int scale = 0;
     double result = 0;
@@ -481,10 +1095,14 @@ int main(){
     display_img(img_edge);
 
     //image segmentation
+    map<int, spixel> regions;
     int segment_value = 0;
     bool flag_segment = false;
+    spixel spix_val;
     for(int i=0; i< img_input.rows; i=i+16){
+//        cout<<" index of image_input i value ==="<<i<<endl;
         for(int j=0;j<img_input.cols; j=j+16){
+//            cout<<" index of image_input j value ==="<<j<<endl;
             flag_segment = false;
             flag_segment = contain_edge(img_edge, i, j, 16, 16);
             if(flag_segment){
@@ -501,23 +1119,31 @@ int main(){
                                         for(int i_2 = i_4; i_2 < i_4+4; i_2=i_2+2){
                                             for(int j_2 = j_4; j_2 < j_4+4;  j_2 = j_2+2){
                                                 fillin(img_region, i_2, j_2, 2, 2, segment_value);
+                                                fill_struct(spix_val, i_2, j_2, 2, 2, segment_value);
+                                                regions.insert(make_pair(segment_value, spix_val));
                                                 segment_value++;
                                             }
                                         }
                                     }else{
                                         fillin(img_region, i_4, j_4, 4, 4, segment_value);
+                                        fill_struct(spix_val, i_4, j_4, 4, 4, segment_value);
+                                        regions.insert(make_pair(segment_value, spix_val));
                                         segment_value++;
                                     }
                                 }
                             }
                         }else{
                             fillin(img_region, i_8, j_8, 8, 8, segment_value);
+                            fill_struct(spix_val, i_8, j_8, 8, 8, segment_value);
+                            regions.insert(make_pair(segment_value, spix_val));
                             segment_value++;
                         }
                     }
                 }
             }else{
                 fillin(img_region, i, j, 16, 16, segment_value);
+                fill_struct(spix_val, i, j, 16, 16, segment_value);
+                regions.insert(make_pair(segment_value, spix_val));
                 segment_value++;
             }
         }
@@ -525,34 +1151,319 @@ int main(){
 
     cout<< segment_value<<endl;
     cout<<"-------------------------------------------------------------------------------------------"<<endl;
-    display_img(img_region);
+    display_img_double(img_region);
+
+    cout<<"map value is================================================================================="<<endl;
+//    show_map(regions);
 //    contain_one_count(img_edge);
 //    cv::Mat img_region_display(size, CV_64FC1);
 //    normalize(img_region, img_region_display, segment_value);
 //    cv::namedWindow("sar");
 //    cv::imshow("sar",img_region_display);
 //    cv::waitKey(0);
-    cv::Mat img_region_backup(img_region.size(), img_region.type());
-    img_region.copyTo(img_region_backup);
-    for(int i = 0 ;i< segment_value; i++){
-        img_region_backup.copyTo(img_region);
-        display_img(img_region);
-        img_region = img_region - i;
-        reverse_mat_value(img_region);
-        display_img(img_region);
-        cout<<endl;
-        cout<<"----------------------------------------------------------------"<<endl;
+
+//    generate_trval(img_region, img_input, segment_value);
+
+//    cv::Mat img_region_backup(img_region.size(), img_region.type());
+//    cv::Mat img_region2(img_region.size(), img_region.type());
+//    cv::Mat img_mask(img_region.size(), CV_8U);
+//    img_region.copyTo(img_region_backup);
+//    double u0 = 0.0;
+//    double u01 = 0.0;
+//    double u02 = 0.0;
+//    double u1 = 0.0;
+//    double u2 = 0.0;
+//    double u4 = 0.0;
+//    double etasc = 0.0;
+//    double tr = 0.0;
+//    int N1 = 0;
+//    int N2 = 0;
+//    int N = 0;
+//    int n_covert = 0;
+//    for(int i = 0 ;i< segment_value; ){
+//        set<int> neghbors;
+//        img_region_backup.copyTo(img_region);
+//        img_region_backup.copyTo(img_region2);
+////        display_img_double(img_region);
+//        // caculate region1 u1 and n1
+//        img_region = img_region - i;
+////        display_img_double(img_region);
+//        reverse_mat_value(img_region);
+////        display_img_double(img_region);
+//        N1 = contain_non_zero(img_region);
+////        cout<< img_region.type()<<" ================================"<<img_region.size<<endl;
+//        copy_double_uchar(img_region, img_mask);
+////        display_img(img_mask);
+//        n_covert = contain_non_zero_uchar(img_mask);
+//        if(N1!=n_covert){
+//            cout<<"error error error error error error error error error error error error error error error error error error line 701";
+//        }
+//        u1 = cv::mean(img_input,img_mask)(0);
+//        u01 = u1*N1;
+//        show_space();
+//        neghbors = search_neghbors(img_region_backup, regions, i);
+//        show_set(neghbors);
+//        for(set<int>::iterator nebor = neghbors.begin(); nebor!=neghbors.end(); nebor++){
+//            init_mat(img_mask);
+//            u2 = 0.0;
+//            u02 = 0.0;
+//            u0 = 0.0;
+//            N = 0;
+//            N2 = 0;
+//            tr = 0.0;
+//            etasc = 0.0;
+//            u4 = 0.0;
+//
+//            img_region_backup.copyTo(img_region2);
+////            display_img_double(img_region2);
+//            img_region2 = img_region2 - *nebor;
+////            display_img_double(img_region2);
+//            reverse_mat_value(img_region2);
+////            display_img_double(img_region2);
+//            N2 = contain_non_zero(img_region2);
+////            cout<< img_region.type()<<" ================================"<<img_region.size<<endl;
+//            copy_double_uchar(img_region2, img_mask);
+//            display_img(img_mask);
+//            n_covert = contain_non_zero_uchar(img_mask);
+//            if(N2!=n_covert){
+//                cout<<"error error error error error error error error error error error error error error error error error error line 701";
+//            }
+//            display_img(img_input);
+//            u2 = cv::mean(img_input,img_mask)(0);
+//            u02 = u2*N2;
+//            u0 = u01 + u02;
+//            N = N1+N2;
+//            u4 = u0/N;
+//            tr = -N1*log(u1) - N2*log(u2) + (N1+N2)*log(u4);
+////            etasc = -N1*log(u1) - N2*log(u2) + (N1+N2)*log(u0);
+//        }
+//
+//        //determine region2 information
+//
+//        //caculate region2 u2 and n2
+//
+////        display_img(img_region);
+////        cout<<endl;
+////        cout<<"----------------------------------------------------------------"<<endl;
+//    }
+
+
+//    cv::Mat test(3, 3, CV_8U);
+//    cv::Mat test_not(test.size(), test.type());
+//    init_mat_value(test, 1);
+//    display_img(test);
+//
+//    test = test -1;
+//    test.at<uchar>(2, 2) = 3;
+//    reverse_mat_value(test);
+//    display_img(test);
+
+
+    //2016-6-23  use region growing mehtod
+    auto universe = generateSegments( img_region );
+    Universe universe_back = *universe;
+
+    int imgSize = img_input.total();
+    list<int> total_label;
+    list<int> temp_neghbors;
+    map<int, Region> R = extractRegions(img_region, universe );
+    map<int, int> find_table;
+
+    for(auto iElement=R.begin(); iElement!=R.end(); iElement++){
+        total_label.push_back(iElement->first);
+    }
+//    sort(total_label.begin(), total_label.end());
+    for(auto items = total_label.begin(); items!=total_label.end(); items++){
+        find_table.insert(make_pair(*items, *items));
     }
 
 
-    cv::Mat test(3, 3, CV_8U);
-    cv::Mat test_not(test.size(), test.type());
-    init_mat_value(test, 1);
-    display_img(test);
+//    cv::Mat img_region_backup(img_region.size(), img_region.type());
+//    cv::Mat img_region2(img_region.size(), img_region.type());
+//    cv::Mat img_mask(img_region.size(), CV_8U);
+//    img_region.copyTo(img_region_backup);
+    double u0 = 0.0;
+    double u1 = 0.0;
+    double u2 = 0.0;
+    double u4 = 0.0;
+    double tr = 0.0;
+    int N1 = 0;
+    int N2 = 0;
+    int N = 0;
+    int n_covert = 0;
 
-    test = test -1;
-    test.at<uchar>(2, 2) = 3;
-    reverse_mat_value(test);
-    display_img(test);
+//    int left_x = 0;
+//    int left_y = 0;
+//    int right_x = 0;
+//    int right_y = 0;
+//    int new_label = 0;
+//    cv::Mat roi;
+    Region temp;
+    Region temp_1;
+    Region temp_inner;
+    Region temp_inner_1;
+    int label;
+    int label_inner;
+    double sum;
+    double sum_inner;
+    vector<int> main_label;
+    vector<int> processed;
+    while(total_label.size()>0){
+        N1 = 0;
+        u1 = 0;
+        sum = 0;
+        label = total_label.front();
+        cout<<"outer label is "<< label<<endl;
+        temp = R[label];
+        temp_1.rect.x = temp.rect.x;
+        temp_1.rect.y = temp.rect.y;
+        temp_1.rect.width = temp.rect.width + 1;
+        temp_1.rect.height = temp.rect.height + 1;
+        temp_neghbors.clear();
+
+        N1 = temp.pixels.size();
+        for(auto items = temp.pixels.begin(); items!= temp.pixels.end(); items++){
+            sum += (unsigned int)img_input.at<uchar>(*items);
+        }
+        u1 = sum/N1;
+        main_label.push_back(label);
+        for ( auto a = R.cbegin(); a != R.cend(); a++ ){
+            if(a->first==label){
+                continue;
+            }
+            if((temp_1.rect & a->second.rect).area()!=0){
+                temp_neghbors.push_back(a->first);
+            }
+        }
+
+        while(temp_neghbors.size()>0){
+            N2 = 0;
+            u2 = 0;
+            sum_inner = 0;
+            label_inner = temp_neghbors.front();
+            cout<<"inner label is "<< label_inner <<endl;
+
+            // make suer this label haven't been processed
+//            auto item_found = find(processed.cbegin(), processed.cend(), label_inner);
+//            if(item_found!=processed.cend()){
+//                temp_neghbors.remove(label_inner);
+//                continue;
+//            }
+
+
+            temp_inner = R[label_inner];
+            N2 = temp_inner.pixels.size();
+            for(auto items = temp_inner.pixels.begin(); items!= temp_inner.pixels.end(); items++){
+                sum_inner += (unsigned int)img_input.at<uchar>(*items);
+            }
+            u2 = sum_inner/N2;
+            u4 = (sum + sum_inner)/(N1+N2);
+            tr = -N1*log(u1) - N2*log(u2) + (N1+N2)*log(u4);
+            //merge
+            if(tr < TR_THRESHOLE){
+                temp_inner_1.rect.x = temp_inner.rect.x;
+                temp_inner_1.rect.y = temp_inner.rect.y;
+                temp_inner_1.rect.width = temp_inner.rect.width + 1;
+                temp_inner_1.rect.height = temp_inner.rect.height + 1;
+                // add will merged region neghobrs
+                for ( auto a = R.cbegin(); a != R.cend(); a++ ){
+                    if(a->first==label_inner){
+                        continue;
+                    }
+                    if((temp_inner_1.rect & a->second.rect).area()!=0){
+                        temp_neghbors.push_back(a->first);
+                    }
+                }
+
+                //merge pixel to outer loop label
+                for(auto items = temp_inner.pixels.begin(); items!= temp_inner.pixels.end(); items++){
+                    temp.pixels.push_back(*items);
+                }
+                temp_inner.parent_label = label;
+                processed.push_back(label_inner);
+                total_label.remove(label_inner);
+                temp_neghbors.remove(label_inner);
+
+                //update outer region parmaters
+                N1 = temp.pixels.size();
+                sum = 0;
+                for(auto items = temp.pixels.begin(); items!= temp.pixels.end(); items++){
+                    sum += (unsigned int)img_input.at<uchar>(*items);
+                }
+                u1 = sum/N1;
+            }else{
+                temp_neghbors.remove(label_inner);
+            }
+        }
+        processed.push_back(label_inner);
+        total_label.remove(label);
+    }
+
+
+
+
+//    for ( auto a = R.cbegin(); a != R.cend(); a++ )
+//    {
+//        auto tmp = a;
+//        tmp++;
+//        vector<int> region_info;
+//        region_info.push_back(a->first);
+//
+//        u1 = 0;
+//        N1 = 0;
+//        new_label = 0;
+//        // row info
+//        left_x = a->second.rect.y;
+//        // col info
+//        left_y = a->second.rect.x;
+//        // right bottom corner
+//        right_x = a->second.rect.br().y;
+//        right_y = a->second.rect.br().x;
+//        N1 = (right_x-left_x)*(right_y-left_y);
+//
+//        roi = img_input(cv::Range(left_x, right_x), cv::Range(left_y, right_y));
+//        u1 = cv::mean(roi)(0);
+//        temp.rect.x = a->second.rect.x;
+//        temp.rect.y = a->second.rect.y;
+//        temp.rect.width = a->second.rect.width + 1;
+//        temp.rect.height = a->second.rect.height + 1;
+//
+//        for ( auto b = tmp; b != R.cend(); b++ )
+//        {
+//            if ( isIntersecting( temp, b->second ) )
+//            {
+//                u2 = 0.0;
+//                u02 = 0.0;
+//                u0 = 0.0;
+//                N = 0;
+//                N2 = 0;
+//                tr = 0.0;
+//                u4 = 0.0;
+//
+//                // row info
+//                left_x = b->second.rect.y;
+//                // col info
+//                left_y = b->second.rect.x;
+//                // right bottom corner
+//                right_x = b->second.rect.br().y;
+//                right_y = b->second.rect.br().x;
+//                N2 = (right_x-left_x)*(right_y-left_y);
+//                roi = img_input(cv::Range(left_x, right_x), cv::Range(left_y, right_y));
+//                u2 = cv::mean(roi)(0);
+//                tr = -N1*log(u1) - N2*log(u2) + (N1+N2)*log(u4);
+//
+//                if(tr<TR_THRESHOLE){
+//                    new_label = max(a->first, b->first);
+//                    region_info.push_back(b->first);
+//                }
+////                neighbours.push_back( std::make_pair( std::min( a->first, b->first ), std::max( a->first, b->first ) ) );
+//            }
+//        }
+//    }
+
+    show_space();
+    for(auto iElem=main_label.begin(); iElem!=main_label.end();iElem++){
+        cout<<"the pixel value is ===" << *iElem<<endl;
+    }
     return 0;
 }
