@@ -1269,10 +1269,12 @@ int main(){
     vector<int> main_label;
     vector<int> processed;
     vector<int> merged;
+    bool flag_merge = false;
     while(total_label.size()>0){
         N1 = 0;
         u1 = 0;
         sum = 0;
+        flag_merge = false;
         label = total_label.front();
         processed.clear();
         temp_neghbors.clear();
@@ -1385,7 +1387,21 @@ int main(){
                 merged.push_back(label_inner);
                 total_label.remove(label_inner);
                 temp_neghbors.remove(label_inner);
+                flag_merge = true;
+                //update outer region parmaters
+                N1 = R[label].pixels.size();
+                sum = 0;
+                for(auto items = R[label].pixels.begin(); items!= R[label].pixels.end(); items++){
+                    sum += (unsigned int)img_input.at<uchar>(*items);
+                }
+                u1 = sum/N1;
+                total_label.remove(label_inner);
+            }else{
+                temp_neghbors.remove(label_inner);
+                processed.push_back(label_inner);
+            }
 
+            if(temp_neghbors.size()==0&flag_merge){
                 find_region_boundarys(R[label]);
                 // add neghbors
                 for(auto iPixels = R[label].boundaries_add.begin(); iPixels!=R[label].boundaries_add.end();iPixels++){
@@ -1426,18 +1442,8 @@ int main(){
                         }
                     }
                 }
-                //update outer region parmaters
-                N1 = R[label].pixels.size();
-                sum = 0;
-                for(auto items = R[label].pixels.begin(); items!= R[label].pixels.end(); items++){
-                    sum += (unsigned int)img_input.at<uchar>(*items);
-                }
-                u1 = sum/N1;
-                total_label.remove(label_inner);
-            }else{
-                temp_neghbors.remove(label_inner);
-                processed.push_back(label_inner);
             }
+
         }
         cout<<"label is ==="<<label<<" label elements is ====="<<R[label].pixels.size()<<endl;
         R[label].processed = 1;
