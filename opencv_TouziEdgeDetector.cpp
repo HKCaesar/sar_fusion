@@ -30,7 +30,7 @@ const double CONST_PI_8 =     0.39269908169872415481;  /* pi/8 */
 //const double THRESHOLD = 0.3;
 //const double TR_THRESHOLE = 2.7;
 
-const double THRESHOLD = 0.23;
+const double THRESHOLD = 0.3;
 const double TR_THRESHOLE = 2;
 
 
@@ -319,10 +319,6 @@ double caculate_touziEdge_pixel(const cv::Mat& image, const int radius, const in
 
     } // end of the loop on the directions
     return R_contour;
-//    display_img_double(img_touiz);
-//    cv::namedWindow("sar");
-//    cv::imshow("sar",img_touiz);
-//    cv::waitKey(0);
 }
 
 bool contain_edge(const cv::Mat& img_edge, int x_left, int y_left, int height, int width){
@@ -476,30 +472,6 @@ void copy_double_uchar(cv::Mat src, cv::Mat dst){
     }
 }
 
-//void generate_total_neghbors(const cv::Mat &img_region, int segmentVal){
-//    for(int i=0; i<segmentVal; i++){
-//        set<int> neghbors;
-//        spixel pix_info;
-//        map<int, spixel>::const_iterator pix_iter = regions.find(weight);
-//        pix_info = pix_iter->second;
-//        int rows = pix_info.x_left + pix_info.height;
-//        int cols = pix_info.y_left + pix_info.width;
-//        int pix_val = 0;
-//        for(int i=pix_info.x_left; i<(pix_info.x_left+pix_info.height); i++){
-//            pix_val = (int)imgs.at<double>(i, cols);
-//            if((pix_val-pix_info.weight)!=0){
-//                neghbors.insert(pix_val);
-//            }
-//        }
-//        for(int i=pix_info.y_left; i<(pix_info.y_left+pix_info.width); i++){
-//            pix_val = (int)imgs.at<double>(rows, i);
-//            if((pix_val-pix_info.weight)!=0){
-//                neghbors.insert(pix_val);
-//            }
-//        }
-//        return neghbors;
-//    }
-//}
 
 cv::Mat generate_trval(const cv::Mat &img_region, const cv::Mat& img_input, int segmentVal){
     show_space();
@@ -719,6 +691,7 @@ shared_ptr<Universe> segmentGraph( int numVertices, int numEdges, vector<edge> &
     return universe;
 }
 
+
 // image segmentation using "Efficient Graph-Based Image Segmentation"
 shared_ptr<Universe> segmentation( const cv::Mat &blurred)
 {
@@ -738,10 +711,6 @@ shared_ptr<Universe> segmentation( const cv::Mat &blurred)
                 edges[num].a = y * width + x;
                 edges[num].b = y * width + ( x + 1 );
                 double result = diff( blurred, x, y, x + 1, y );
-//                if(result!=0){
-//                    cout<< "a, "<<edges[num].a<<"  and b, value is "<<edges[num].b<<" the result is "<<result<<endl;
-//                    total++;
-//                }
                 edges[num].w = diff( blurred, x, y, x + 1, y );
                 num++;
             }
@@ -752,10 +721,6 @@ shared_ptr<Universe> segmentation( const cv::Mat &blurred)
                 edges[num].b = ( y + 1 ) * width + x;
                 edges[num].w = diff( blurred, x, y, x, y + 1 );
                 double result = diff( blurred, x, y, x + 1, y );
-//                if(result!=0){
-//                    cout<< "a, "<<edges[num].a<<"  and b, value is "<<edges[num].b<<" the result is "<<result<<endl;
-//                    total++;
-//                }
                 num++;
             }
 
@@ -765,10 +730,6 @@ shared_ptr<Universe> segmentation( const cv::Mat &blurred)
                 edges[num].b = ( y + 1 ) * width + ( x + 1 );
                 edges[num].w = diff( blurred, x, y, x + 1, y + 1 );
                 double result = diff( blurred, x, y, x + 1, y );
-//                if(result!=0){
-//                    cout<< "a, "<<edges[num].a<<"  and b, value is "<<edges[num].b<<" the result is "<<result<<endl;
-//                    total++;
-//                }
                 num++;
             }
 
@@ -778,29 +739,13 @@ shared_ptr<Universe> segmentation( const cv::Mat &blurred)
                 edges[num].b = ( y - 1 ) * width + ( x + 1 );
                 edges[num].w = diff( blurred, x, y, x + 1, y - 1 );
                 double result = diff( blurred, x, y, x + 1, y );
-//                if(result!=0){
-//                    cout<< "a, "<<edges[num].a<<"  and b, value is "<<edges[num].b<<" the result is "<<result<<endl;
-//                    total++;
-//                }
+
                 num++;
             }
         }
     }
     auto universe = segmentGraph( width*height, num, edges);
-//    Universe univer = *universe;
 
-//    for ( int i = 0; i < num; i++ )
-//    {
-//        int a = universe->find( edges[i].a );
-//        int b = universe->find( edges[i].b );
-//        if ( ( a != b ) && ( ( universe->size( a ) < minSize ) || ( universe->size( b ) < minSize ) ) )
-//        {
-//            universe->join( a, b );
-//        }
-//    }
-//    show_space();
-//    show_space();
-//    show_edge_info(edges);
     return universe;
 }
 
@@ -814,6 +759,9 @@ struct Region
     int processed = 0;
     cv::Rect rect;
     std::vector<int> labels;
+    std::vector<cv::Point> boundaries_add;
+    std::vector<cv::Point> boundaries_sub;
+    std::vector<cv::Point> boundaries;
     std::vector<cv::Point> pixels;
     int total_pixel;
     Region() {}
@@ -851,7 +799,7 @@ struct Region
 };
 
 
-std::map<int, Region> extractRegions( const cv::Mat &img, std::shared_ptr<Universe> universe )
+std::map<int, Region> extractRegions( const cv::Mat &img, std::shared_ptr<Universe> universe, set<int>& total_labels )
 {
     std::map<int, Region> R;
 
@@ -860,47 +808,33 @@ std::map<int, Region> extractRegions( const cv::Mat &img, std::shared_ptr<Univer
         for ( int x = 0; x < img.cols; x++ )
         {
             int label = universe->find( y*img.cols + x );
-
-            if ( R.find( label ) == R.end() )
-            {
-                R[label] = Region( cv::Rect( 100000, 100000, 0, 0 ), label );
-            }
-
+            total_labels.insert(label);
+//            if ( R.find( label ) == R.end() )
+//            {
+//                R[label] = Region( cv::Rect( 100000, 100000, 0, 0 ), label );
+//            }
             R[label].pixels.push_back(cv::Point(x, y));
-
-            if ( R[label].rect.x > x )
-            {
-                R[label].rect.x = x;
-            }
-
-            if ( R[label].rect.y > y )
-            {
-                R[label].rect.y = y;
-            }
-            // the bottom right corner
-            if ( R[label].rect.br().x < x )
-            {
-                R[label].rect.width = x - R[label].rect.x + 1;
-            }
-
-            if ( R[label].rect.br().y < y )
-            {
-                R[label].rect.height = y - R[label].rect.y + 1;
-            }
+//            if ( R[label].rect.x > x )
+//            {
+//                R[label].rect.x = x;
+//            }
+//
+//            if ( R[label].rect.y > y )
+//            {
+//                R[label].rect.y = y;
+//            }
+//            // the bottom right corner
+//            if ( R[label].rect.br().x < x )
+//            {
+//                R[label].rect.width = x - R[label].rect.x + 1;
+//            }
+//
+//            if ( R[label].rect.br().y < y )
+//            {
+//                R[label].rect.height = y - R[label].rect.y + 1;
+//            }
         }
     }
-
-//    cv::Mat gradient = calcTextureGradient( img );
-//
-//    cv::Mat hsv;
-//    cv::cvtColor( img, hsv, cv::COLOR_BGR2HSV );
-//
-//    for ( auto &labelRegion : R )
-//    {
-//        labelRegion.second.size = calcSize( img, universe, labelRegion.first );
-//        labelRegion.second.colourHist = calcColourHist( hsv, universe, labelRegion.first );
-//        labelRegion.second.textureHist = calcTextureHist( img, gradient, universe, labelRegion.first );
-//    }
 
     return R;
 }
@@ -974,14 +908,6 @@ void visualize2( const cv::Mat &img, map<int, Region>& R, vector<int>& main_labe
             }
     }
 
-//    for ( int y = 0; y < height; y++ )
-//    {
-//        for ( int x = 0; x < width; x++ )
-//        {
-//            segmentated.at<cv::Vec3b>( y, x ) = colors[universe->find( y*width + x )];
-//        }
-//    }
-//    cv::imwrite("/home/auroua/sassi.jpg", segmentated);
     cv::imshow( "Initial Segmentation Result", segmentated );
     cv::waitKey( 0 );
 }
@@ -1000,6 +926,99 @@ struct CmpByKeyLength {
         return k1 > k2;
     }
 };
+
+
+//2016-6-26
+bool find_vec(vector<cv::Point> values, cv::Point val){
+    bool flag = false;
+    for(auto iElement=values.begin(); iElement!=values.end(); iElement++){
+        if((val.x==iElement->x)&(val.y==iElement->y)){
+            flag = true;
+            return flag;
+        }
+    }
+    return flag;
+}
+
+
+//add boundary detection methon
+//v0.1 version only consider the regular rect area, this method tries to fix this bug, to fit the unregular rect like the following
+//3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
+//3, 3, 3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+//3, 3, 3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+//3, 3, 3, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+//3, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+//3, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2,
+//3, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2,
+//3, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+//3, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+//3, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+//3, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+//3, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+//3, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+//3, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+//3, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+//3, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+void find_boundarys(map<int,Region>& R){
+    for(auto iElement=R.begin(); iElement!=R.end();iElement++){
+        for(auto item = iElement->second.pixels.begin(); item!=iElement->second.pixels.end(); item++){
+            bool temp_flag = true;
+            bool temp_flag2 = true;
+            cv::Point temp;
+            cv::Point temp2;
+            temp.x = item->x+1;
+            temp.y = item->y+1;
+
+            int boundary_x = item->x-1;
+            int boundary_y = item->y-1;
+            if(boundary_x>=0&boundary_y>=0){
+                temp2.x = item->x-1;
+                temp2.y = item->y-1;
+                temp_flag2 = find_vec(iElement->second.pixels, temp2);
+            }
+            temp_flag = find_vec(iElement->second.pixels, temp);
+            if(!temp_flag){
+                iElement->second.boundaries_add.push_back(*item);
+                iElement->second.boundaries.push_back(*item);
+            }
+            if(!temp_flag2){
+                iElement->second.boundaries_sub.push_back(*item);
+                iElement->second.boundaries.push_back(*item);
+            }
+        }
+    }
+}
+
+void find_region_boundarys(Region& R){
+    R.boundaries_add.clear();
+    R.boundaries_sub.clear();
+    R.boundaries.clear();
+    for(auto item = R.pixels.begin(); item!=R.pixels.end(); item++){
+            bool temp_flag = true;
+            bool temp_flag2 = true;
+            cv::Point temp;
+            cv::Point temp2;
+            temp.x = item->x+1;
+            temp.y = item->y+1;
+
+            int boundary_x = item->x-1;
+            int boundary_y = item->y-1;
+            if(boundary_x>=0&boundary_y>=0){
+                temp2.x = item->x-1;
+                temp2.y = item->y-1;
+                temp_flag2 = find_vec(R.pixels, temp2);
+            }
+            temp_flag = find_vec(R.pixels, temp);
+            if(!temp_flag){
+                R.boundaries_add.push_back(*item);
+                R.boundaries.push_back(*item);
+            }
+            if(!temp_flag2){
+                R.boundaries_sub.push_back(*item);
+                R.boundaries.push_back(*item);
+            }
+    }
+}
 
 int main(){
     // range from 3 to 15
@@ -1129,12 +1148,7 @@ int main(){
         }
     }
     cout<<"------------------------------------------------------------"<<endl;
-//    display_img2(img_input);
 
-    // caculate obt touziedge
-//    caculate_touziEdge(img_input, 1);
-//    double values = caculate_toufloodFillziEdge_pixel(img_input, 1, 1, 1);
-//    cout<< values<< endl;
     unsigned int scale = 0;
     double result = 0;
     for(int i=1; i< img_output.rows-1; i++){
@@ -1212,109 +1226,6 @@ int main(){
     display_img_double(img_region);
 
     cout<<"map value is================================================================================="<<endl;
-//    show_map(regions);
-//    contain_one_count(img_edge);
-//    cv::Mat img_region_display(size, CV_64FC1);
-//    normalize(img_region, img_region_display, segment_value);
-//    cv::namedWindow("sar");
-//    cv::imshow("sar",img_region_display);
-//    cv::waitKey(0);
-
-//    generate_trval(img_region, img_input, segment_value);
-
-//    cv::Mat img_region_backup(img_region.size(), img_region.type());
-//    cv::Mat img_region2(img_region.size(), img_region.type());
-//    cv::Mat img_mask(img_region.size(), CV_8U);
-//    img_region.copyTo(img_region_backup);
-//    double u0 = 0.0;
-//    double u01 = 0.0;
-//    double u02 = 0.0;
-//    double u1 = 0.0;
-//    double u2 = 0.0;
-//    double u4 = 0.0;
-//    double etasc = 0.0;
-//    double tr = 0.0;
-//    int N1 = 0;
-//    int N2 = 0;
-//    int N = 0;
-//    int n_covert = 0;
-//    for(int i = 0 ;i< segment_value; ){
-//        set<int> neghbors;
-//        img_region_backup.copyTo(img_region);
-//        img_region_backup.copyTo(img_region2);
-////        display_img_double(img_region);
-//        // caculate region1 u1 and n1
-//        img_region = img_region - i;
-////        display_img_double(img_region);
-//        reverse_mat_value(img_region);
-////        display_img_double(img_region);
-//        N1 = contain_non_zero(img_region);
-////        cout<< img_region.type()<<" ================================"<<img_region.size<<endl;
-//        copy_double_uchar(img_region, img_mask);
-////        display_img(img_mask);
-//        n_covert = contain_non_zero_uchar(img_mask);
-//        if(N1!=n_covert){
-//            cout<<"error error error error error error error error error error error error error error error error error error line 701";
-//        }
-//        u1 = cv::mean(img_input,img_mask)(0);
-//        u01 = u1*N1;
-//        show_space();
-//        neghbors = search_neghbors(img_region_backup, regions, i);
-//        show_set(neghbors);
-//        for(set<int>::iterator nebor = neghbors.begin(); nebor!=neghbors.end(); nebor++){
-//            init_mat(img_mask);
-//            u2 = 0.0;
-//            u02 = 0.0;
-//            u0 = 0.0;
-//            N = 0;
-//            N2 = 0;
-//            tr = 0.0;
-//            etasc = 0.0;
-//            u4 = 0.0;
-//
-//            img_region_backup.copyTo(img_region2);
-////            display_img_double(img_region2);
-//            img_region2 = img_region2 - *nebor;
-////            display_img_double(img_region2);
-//            reverse_mat_value(img_region2);
-////            display_img_double(img_region2);
-//            N2 = contain_non_zero(img_region2);
-////            cout<< img_region.type()<<" ================================"<<img_region.size<<endl;
-//            copy_double_uchar(img_region2, img_mask);
-//            display_img(img_mask);
-//            n_covert = contain_non_zero_uchar(img_mask);
-//            if(N2!=n_covert){
-//                cout<<"error error error error error error error error error error error error error error error error error error line 701";
-//            }
-//            display_img(img_input);
-//            u2 = cv::mean(img_input,img_mask)(0);
-//            u02 = u2*N2;
-//            u0 = u01 + u02;
-//            N = N1+N2;
-//            u4 = u0/N;
-//            tr = -N1*log(u1) - N2*log(u2) + (N1+N2)*log(u4);
-////            etasc = -N1*log(u1) - N2*log(u2) + (N1+N2)*log(u0);
-//        }
-//
-//        //determine region2 information
-//
-//        //caculate region2 u2 and n2
-//
-////        display_img(img_region);
-////        cout<<endl;
-////        cout<<"----------------------------------------------------------------"<<endl;
-//    }
-
-
-//    cv::Mat test(3, 3, CV_8U);
-//    cv::Mat test_not(test.size(), test.type());
-//    init_mat_value(test, 1);
-//    display_img(test);
-//
-//    test = test -1;
-//    test.at<uchar>(2, 2) = 3;
-//    reverse_mat_value(test);
-//    display_img(test);
 
 
     //2016-6-23  use region growing mehtod
@@ -1324,22 +1235,19 @@ int main(){
     int imgSize = img_input.total();
     list<int> total_label;
     list<int> temp_neghbors;
-    map<int, Region> R = extractRegions(img_region, universe );
+    set<int> total_labels_set;
+    map<int, Region> R = extractRegions(img_region, universe,total_labels_set );
+//    cout<< total_labels_set.size()<<endl;
+//    cout<< "map size is ==="<<R.size()<<endl;
     map<int, int> find_table;
 
     for(auto iElement=R.begin(); iElement!=R.end(); iElement++){
         total_label.push_back(iElement->first);
     }
-//    sort(total_label.begin(), total_label.end());
-//    for(auto items = total_label.begin(); items!=total_label.end(); items++){
-//        find_table.insert(make_pair(*items, *items));
-//    }
+//    cout<<"total label size is ==="<<total_label.size()<<endl;
 
+    find_boundarys(R);
 
-//    cv::Mat img_region_backup(img_region.size(), img_region.type());
-//    cv::Mat img_region2(img_region.size(), img_region.type());
-//    cv::Mat img_mask(img_region.size(), CV_8U);
-//    img_region.copyTo(img_region_backup);
     double u0 = 0.0;
     double u1 = 0.0;
     double u2 = 0.0;
@@ -1350,16 +1258,10 @@ int main(){
     int N = 0;
     int n_covert = 0;
 
-//    int left_x = 0;
-//    int left_y = 0;
-//    int right_x = 0;
-//    int right_y = 0;
-//    int new_label = 0;
-//    cv::Mat roi;
-//    Region temp;
     Region temp_1;
-//    Region temp_inner;
     Region temp_inner_1;
+    cv::Point point1;
+    cv::Point point2;
     int label;
     int label_inner;
     double sum;
@@ -1372,6 +1274,9 @@ int main(){
         u1 = 0;
         sum = 0;
         label = total_label.front();
+        processed.clear();
+        temp_neghbors.clear();
+        cout<< "outer label is"<< label << endl;
         if(R[label].processed==1){
             total_label.remove(label);
             continue;
@@ -1380,13 +1285,12 @@ int main(){
             total_label.remove(label);
             continue;
         }
-//        cout<<"outer label is "<< label<<endl;
-//        temp = R[label];
-        temp_1.rect.x = R[label].rect.x;
-        temp_1.rect.y = R[label].rect.y;
-        temp_1.rect.width = R[label].rect.width + 1;
-        temp_1.rect.height = R[label].rect.height + 1;
-        temp_neghbors.clear();
+//
+//        temp_1.rect.x = R[label].rect.x;
+//        temp_1.rect.y = R[label].rect.y;
+//        temp_1.rect.width = R[label].rect.width + 1;
+//        temp_1.rect.height = R[label].rect.height + 1;
+//        temp_neghbors.clear();
 
         N1 = R[label].pixels.size();
         for(auto items = R[label].pixels.begin(); items!= R[label].pixels.end(); items++){
@@ -1394,12 +1298,39 @@ int main(){
         }
         u1 = sum/N1;
         main_label.push_back(label);
-        for ( auto a = R.cbegin(); a != R.cend(); a++ ){
-            if(a->first==label){
-                continue;
+
+        for(auto iPixels = R[label].boundaries_add.begin(); iPixels!=R[label].boundaries_add.end();iPixels++){
+            for ( auto a = R.cbegin(); a != R.cend(); a++ ){
+                bool flag = false;
+                if(a->first==label){
+                    continue;
+                }
+                point1.x = iPixels->x+1;
+                point1.y = iPixels->y+1;
+                flag = find_vec(a->second.pixels, point1);
+                if(flag){
+                    auto location = find(temp_neghbors.begin(), temp_neghbors.end(), a->first);
+                    if(location==temp_neghbors.end()){
+                        temp_neghbors.push_back(a->first);
+                    }
+                }
             }
-            if((temp_1.rect & a->second.rect).area()!=0){
-                temp_neghbors.push_back(a->first);
+        }
+        for(auto iPixels = R[label].boundaries_sub.begin(); iPixels!=R[label].boundaries_sub.end();iPixels++){
+            for ( auto a = R.cbegin(); a != R.cend(); a++ ){
+                bool flag = false;
+                if(a->first==label){
+                    continue;
+                }
+                point1.x = iPixels->x-1;
+                point1.y = iPixels->y-1;
+                flag = find_vec(a->second.pixels, point1);
+                if(flag){
+                    auto location = find(temp_neghbors.begin(), temp_neghbors.end(), a->first);
+                    if(location==temp_neghbors.end()){
+                        temp_neghbors.push_back(a->first);
+                    }
+                }
             }
         }
 
@@ -1408,10 +1339,8 @@ int main(){
             u2 = 0;
             sum_inner = 0;
             label_inner = temp_neghbors.front();
-//            cout<<"inner label is "<< label_inner <<endl;
+            cout << "inner label is ==="<<label_inner<<endl;
 
-            // make suer this label haven't been processed
-            // already merged nodes can't merge again
             auto item_found = find(merged.cbegin(), merged.cend(), label_inner);
             if(item_found!=merged.cend()){
                 temp_neghbors.remove(label_inner);
@@ -1419,11 +1348,17 @@ int main(){
             }
             if(R[label_inner].merged==1){
                 temp_neghbors.remove(label_inner);
+                continue;
             }
             if(R[label_inner].processed==1){
                 temp_neghbors.remove(label_inner);
+                continue;
             }
 
+            if(label_inner==label){
+                temp_neghbors.remove(label_inner);
+                continue;
+            }
 //            temp_inner = R[label_inner];
             N2 = R[label_inner].pixels.size();
             for(auto items = R[label_inner].pixels.begin(); items!= R[label_inner].pixels.end(); items++){
@@ -1438,20 +1373,6 @@ int main(){
                 temp_inner_1.rect.y = R[label_inner].rect.y;
                 temp_inner_1.rect.width = R[label_inner].rect.width + 1;
                 temp_inner_1.rect.height = R[label_inner].rect.height + 1;
-                // add will merged region neghobrs
-                for ( auto a = R.cbegin(); a != R.cend(); a++ ){
-                    if(a->first==label_inner){
-                        continue;
-                    }
-                    if((temp_inner_1.rect & a->second.rect).area()!=0){
-                        if(R[a->first].processed!=1){
-                            temp_neghbors.push_back(a->first);
-                        }
-                        if(R[a->first].merged!=1){
-                            temp_neghbors.push_back(a->first);
-                        }
-                    }
-                }
 
                 //merge pixel to outer loop label
                 for(auto items = R[label_inner].pixels.begin(); items!= R[label_inner].pixels.end(); items++){
@@ -1465,6 +1386,46 @@ int main(){
                 total_label.remove(label_inner);
                 temp_neghbors.remove(label_inner);
 
+                find_region_boundarys(R[label]);
+                // add neghbors
+                for(auto iPixels = R[label].boundaries_add.begin(); iPixels!=R[label].boundaries_add.end();iPixels++){
+                    for ( auto a = R.cbegin(); a != R.cend(); a++ ){
+                        bool flag = false;
+                        if(a->first==label){
+                            continue;
+                        }
+                        point1.x = iPixels->x+1;
+                        point1.y = iPixels->y+1;
+                        flag = find_vec(a->second.pixels, point1);
+                        if(flag){
+                            auto location = find(temp_neghbors.begin(), temp_neghbors.end(), a->first);
+                            auto loc_merged = find(merged.begin(), merged.end(), a->first);
+                            auto loc_processed = find(processed.begin(), processed.end(), a->first);
+                            if((location==temp_neghbors.end())&(loc_merged==merged.end())&(loc_processed==processed.end())){
+                                temp_neghbors.push_back(a->first);
+                            }
+                        }
+                    }
+                }
+                for(auto iPixels = R[label].boundaries_sub.begin(); iPixels!=R[label].boundaries_sub.end();iPixels++){
+                    for ( auto a = R.cbegin(); a != R.cend(); a++ ){
+                        bool flag = false;
+                        if(a->first==label){
+                            continue;
+                        }
+                        point1.x = iPixels->x-1;
+                        point1.y = iPixels->y-1;
+                        flag = find_vec(a->second.pixels, point1);
+                        if(flag){
+                            auto location = find(temp_neghbors.begin(), temp_neghbors.end(), a->first);
+                            auto loc_merged = find(merged.begin(), merged.end(), a->first);
+                            auto loc_processed = find(processed.begin(), processed.end(), a->first);
+                            if((location==temp_neghbors.end())&(loc_merged==merged.end())&(loc_processed==processed.end())){
+                                temp_neghbors.push_back(a->first);
+                            }
+                        }
+                    }
+                }
                 //update outer region parmaters
                 N1 = R[label].pixels.size();
                 sum = 0;
@@ -1475,77 +1436,15 @@ int main(){
                 total_label.remove(label_inner);
             }else{
                 temp_neghbors.remove(label_inner);
+                processed.push_back(label_inner);
             }
         }
-        processed.push_back(label_inner);
         cout<<"label is ==="<<label<<" label elements is ====="<<R[label].pixels.size()<<endl;
         R[label].processed = 1;
         R[label].merged = 1;
-//        cout<<"temp label is ==="<<label<<" label elements is ====="<<temp.pixels.size()<<endl;
+        merged.push_back(label);
         total_label.remove(label);
     }
-
-
-
-
-//    for ( auto a = R.cbegin(); a != R.cend(); a++ )
-//    {
-//        auto tmp = a;
-//        tmp++;
-//        vector<int> region_info;
-//        region_info.push_back(a->first);
-//
-//        u1 = 0;
-//        N1 = 0;
-//        new_label = 0;
-//        // row info
-//        left_x = a->second.rect.y;
-//        // col info
-//        left_y = a->second.rect.x;
-//        // right bottom corner
-//        right_x = a->second.rect.br().y;
-//        right_y = a->second.rect.br().x;
-//        N1 = (right_x-left_x)*(right_y-left_y);
-//
-//        roi = img_input(cv::Range(left_x, right_x), cv::Range(left_y, right_y));
-//        u1 = cv::mean(roi)(0);
-//        temp.rect.x = a->second.rect.x;
-//        temp.rect.y = a->second.rect.y;
-//        temp.rect.width = a->second.rect.width + 1;
-//        temp.rect.height = a->second.rect.height + 1;
-//
-//        for ( auto b = tmp; b != R.cend(); b++ )
-//        {
-//            if ( isIntersecting( temp, b->second ) )
-//            {
-//                u2 = 0.0;
-//                u02 = 0.0;
-//                u0 = 0.0;
-//                N = 0;
-//                N2 = 0;
-//                tr = 0.0;
-//                u4 = 0.0;
-//
-//                // row info
-//                left_x = b->second.rect.y;
-//                // col info
-//                left_y = b->second.rect.x;
-//                // right bottom corner
-//                right_x = b->second.rect.br().y;
-//                right_y = b->second.rect.br().x;
-//                N2 = (right_x-left_x)*(right_y-left_y);
-//                roi = img_input(cv::Range(left_x, right_x), cv::Range(left_y, right_y));
-//                u2 = cv::mean(roi)(0);
-//                tr = -N1*log(u1) - N2*log(u2) + (N1+N2)*log(u4);
-//
-//                if(tr<TR_THRESHOLE){
-//                    new_label = max(a->first, b->first);
-//                    region_info.push_back(b->first);
-//                }
-////                neighbours.push_back( std::make_pair( std::min( a->first, b->first ), std::max( a->first, b->first ) ) );
-//            }
-//        }
-//    }
 
     multimap<int, int, CmpByKeyLength> final_data;
     show_space();
