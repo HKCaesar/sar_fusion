@@ -16,8 +16,13 @@ int main(int argc, char *argv[]) {
 //    w.show();
 //    return a.exec();
 /* Extract Input & Output filenames */
-    const char* MSTARname = "/home/auroua/workspace/matlab2015/MSTAR_PUBLIC_TARGETS_CHIPS_T72_BMP2_BTR70_SLICY/TARGETS/TEST/15_DEG/BMP2/SN_9563/HB03352.000";
-    const char* JPEGname = "/home/auroua/workspace/matlab2015/MSTAR_PUBLIC_TARGETS_CHIPS_T72_BMP2_BTR70_SLICY/TARGETS/TEST/15_DEG/BMP2/SN_9563/HB03352_000.jpg";
+//    const char* MSTARname = "/home/auroua/workspace/matlab2015/MSTAR_PUBLIC_TARGETS_CHIPS_T72_BMP2_BTR70_SLICY/TARGETS/TEST/15_DEG/BMP2/SN_9563/HB03352.000";
+//    const char* JPEGname = "/home/auroua/workspace/matlab2015/MSTAR_PUBLIC_TARGETS_CHIPS_T72_BMP2_BTR70_SLICY/TARGETS/TEST/15_DEG/BMP2/SN_9563/HB03352_000.jpg";
+
+//    const char* MSTARname = "/home/auroua/workspace/matlab2015/MSTAR_PUBLIC_TARGETS_CHIPS_T72_BMP2_BTR70_SLICY/TARGETS/TRAIN/17_DEG/T72/SN_132/HB03882.015";
+    const char* MSTARname = "/home/auroua/workspace/matlab2015/mstar/MSTAR_Data/MSTAR_PUBLIC_MIXED_TARGETS_CD2/17_DEG/COL2/SCENE1/T62/HB19929.016";
+//    const char* JPEGname = "/home/auroua/workspace/matlab2015/MSTAR_PUBLIC_TARGETS_CHIPS_T72_BMP2_BTR70_SLICY/TARGETS/TRAIN/17_DEG/T72/SN_132/HB03882.015.jpg";
+    const char* JPEGname = "/home/auroua/workspace/matlab2015/mstar/MSTAR_Data/MSTAR_PUBLIC_MIXED_TARGETS_CD2/17_DEG/COL2/SCENE1/T62/HB19929_016.jpg";
     unsigned char* sar_magnitude = read_mstar(MSTARname, JPEGname, 1, 1, 1, 75);
 //    cout<< (int)sar_magnitude[0] <<",  "<< (int)sar_magnitude[3] <<endl;
     int h = (unsigned int)sar_magnitude[0];

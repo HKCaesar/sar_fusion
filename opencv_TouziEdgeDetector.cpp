@@ -27,7 +27,10 @@ const double CONST_PI =       3.14159265358979323846;  /* pi */
 const double CONST_PI_2 =     1.57079632679489661923;  /* pi/2 */
 const double CONST_PI_4 =     0.78539816339744830962;  /* pi/4 */
 const double CONST_PI_8 =     0.39269908169872415481;  /* pi/8 */
-const double THRESHOLD = 0.3;
+//const double THRESHOLD = 0.3;
+//const double TR_THRESHOLE = 2.7;
+
+const double THRESHOLD = 0.23;
 const double TR_THRESHOLE = 2;
 
 
@@ -92,6 +95,16 @@ void init_mat(cv::Mat& image){
         uchar* datas = image.ptr<uchar>(i);
         for(int j = 0; j < image.cols; j++){
             datas[j] = 0;
+        }
+    }
+}
+
+void init_mat2(cv::Mat& image){
+//    cout << "in display_img rows="<<image.rows << " cols="<<image.cols<< endl;
+    for(int i = 0; i < image.rows; i++){
+        uchar* datas = image.ptr<uchar>(i);
+        for(int j = 0; j < image.cols; j++){
+            datas[j] = 100;
         }
     }
 }
@@ -797,6 +810,8 @@ struct Region
 {
     int size;
     int parent_label;
+    int merged = 0;
+    int processed = 0;
     cv::Rect rect;
     std::vector<int> labels;
     std::vector<cv::Point> pixels;
@@ -918,8 +933,8 @@ void visualize( const cv::Mat &img, std::shared_ptr<Universe> universe )
 
     for ( int i = 0; i < height*width; i++ )
     {
-//        cv::Vec3b color( rand256( mt ), rand256( mt ), rand256( mt ) );
-//        colors.push_back( color );
+        cv::Vec3b color( rand256( mt ), rand256( mt ), rand256( mt ) );
+        colors.push_back( color );
     }
 
     for ( int y = 0; y < height; y++ )
@@ -934,6 +949,43 @@ void visualize( const cv::Mat &img, std::shared_ptr<Universe> universe )
     cv::waitKey( 1 );
 }
 
+
+void visualize2( const cv::Mat &img, map<int, Region>& R, vector<int>& main_label )
+{
+    const int height = img.rows;
+    const int width = img.cols;
+    std::vector<cv::Vec3b> colors;
+
+    cv::Mat segmentated( height, width, CV_8UC3 );
+
+    std::random_device rnd;
+    std::mt19937 mt( rnd() );
+    std::uniform_int_distribution<> rand256( 0, 255 );
+
+    for ( int i = 0; i < height*width; i++ )
+    {
+        cv::Vec3b color( rand256( mt ), rand256( mt ), rand256( mt ) );
+        colors.push_back( color );
+    }
+
+    for(auto item = main_label.begin(); item!=main_label.end(); item++){
+            for(auto inner_element=R[*item].pixels.begin(); inner_element!=R[*item].pixels.end();inner_element++){
+                segmentated.at<cv::Vec3b>(*inner_element) = colors[*item];
+            }
+    }
+
+//    for ( int y = 0; y < height; y++ )
+//    {
+//        for ( int x = 0; x < width; x++ )
+//        {
+//            segmentated.at<cv::Vec3b>( y, x ) = colors[universe->find( y*width + x )];
+//        }
+//    }
+//    cv::imwrite("/home/auroua/sassi.jpg", segmentated);
+    cv::imshow( "Initial Segmentation Result", segmentated );
+    cv::waitKey( 0 );
+}
+
 shared_ptr<Universe> generateSegments( const cv::Mat &img)
 {
     auto universe = segmentation(img);
@@ -943,7 +995,11 @@ shared_ptr<Universe> generateSegments( const cv::Mat &img)
     return universe;
 }
 
-
+struct CmpByKeyLength {
+    bool operator()(const int k1, const int k2) {
+        return k1 > k2;
+    }
+};
 
 int main(){
     // range from 3 to 15
@@ -954,9 +1010,11 @@ int main(){
     int status_nij = 0;
     const double sigma_n = 0.5227;
 
-    string input_url = "/home/auroua/workspace/matlab2015/MSTAR_PUBLIC_TARGETS_CHIPS_T72_BMP2_BTR70_SLICY/TARGETS/TEST/15_DEG/BMP2/SN_9563/HB03352_000.jpg";
+//    string input_url = "/home/auroua/workspace/matlab2015/MSTAR_PUBLIC_TARGETS_CHIPS_T72_BMP2_BTR70_SLICY/TARGETS/TEST/15_DEG/BMP2/SN_9563/HB03352_000.jpg";
+    string input_url = "/home/auroua/backup/HB19929_016.jpg";
+//    string input_url = "/home/auroua/workspace/matlab2015/mstar/MSTAR_Data/MSTAR_PUBLIC_MIXED_TARGETS_CD2/17_DEG/COL2/SCENE1/T62/HB19929.jpg";
 //    string input_url = "/home/auroua/workspace/output16_16.png";
-    string output_url = "/home/auroua/workspace/output.png";
+    string output_url = "/home/auroua/workspace/output2.png";
     cv::Mat img_input = cv::imread(input_url, CV_LOAD_IMAGE_ANYDEPTH | CV_LOAD_IMAGE_ANYCOLOR);
 
     int type = img_input.type();
@@ -1273,9 +1331,9 @@ int main(){
         total_label.push_back(iElement->first);
     }
 //    sort(total_label.begin(), total_label.end());
-    for(auto items = total_label.begin(); items!=total_label.end(); items++){
-        find_table.insert(make_pair(*items, *items));
-    }
+//    for(auto items = total_label.begin(); items!=total_label.end(); items++){
+//        find_table.insert(make_pair(*items, *items));
+//    }
 
 
 //    cv::Mat img_region_backup(img_region.size(), img_region.type());
@@ -1298,9 +1356,9 @@ int main(){
 //    int right_y = 0;
 //    int new_label = 0;
 //    cv::Mat roi;
-    Region temp;
+//    Region temp;
     Region temp_1;
-    Region temp_inner;
+//    Region temp_inner;
     Region temp_inner_1;
     int label;
     int label_inner;
@@ -1308,21 +1366,30 @@ int main(){
     double sum_inner;
     vector<int> main_label;
     vector<int> processed;
+    vector<int> merged;
     while(total_label.size()>0){
         N1 = 0;
         u1 = 0;
         sum = 0;
         label = total_label.front();
-        cout<<"outer label is "<< label<<endl;
-        temp = R[label];
-        temp_1.rect.x = temp.rect.x;
-        temp_1.rect.y = temp.rect.y;
-        temp_1.rect.width = temp.rect.width + 1;
-        temp_1.rect.height = temp.rect.height + 1;
+        if(R[label].processed==1){
+            total_label.remove(label);
+            continue;
+        }
+        if(R[label].merged==1){
+            total_label.remove(label);
+            continue;
+        }
+//        cout<<"outer label is "<< label<<endl;
+//        temp = R[label];
+        temp_1.rect.x = R[label].rect.x;
+        temp_1.rect.y = R[label].rect.y;
+        temp_1.rect.width = R[label].rect.width + 1;
+        temp_1.rect.height = R[label].rect.height + 1;
         temp_neghbors.clear();
 
-        N1 = temp.pixels.size();
-        for(auto items = temp.pixels.begin(); items!= temp.pixels.end(); items++){
+        N1 = R[label].pixels.size();
+        for(auto items = R[label].pixels.begin(); items!= R[label].pixels.end(); items++){
             sum += (unsigned int)img_input.at<uchar>(*items);
         }
         u1 = sum/N1;
@@ -1341,19 +1408,25 @@ int main(){
             u2 = 0;
             sum_inner = 0;
             label_inner = temp_neghbors.front();
-            cout<<"inner label is "<< label_inner <<endl;
+//            cout<<"inner label is "<< label_inner <<endl;
 
             // make suer this label haven't been processed
-//            auto item_found = find(processed.cbegin(), processed.cend(), label_inner);
-//            if(item_found!=processed.cend()){
-//                temp_neghbors.remove(label_inner);
-//                continue;
-//            }
+            // already merged nodes can't merge again
+            auto item_found = find(merged.cbegin(), merged.cend(), label_inner);
+            if(item_found!=merged.cend()){
+                temp_neghbors.remove(label_inner);
+                continue;
+            }
+            if(R[label_inner].merged==1){
+                temp_neghbors.remove(label_inner);
+            }
+            if(R[label_inner].processed==1){
+                temp_neghbors.remove(label_inner);
+            }
 
-
-            temp_inner = R[label_inner];
-            N2 = temp_inner.pixels.size();
-            for(auto items = temp_inner.pixels.begin(); items!= temp_inner.pixels.end(); items++){
+//            temp_inner = R[label_inner];
+            N2 = R[label_inner].pixels.size();
+            for(auto items = R[label_inner].pixels.begin(); items!= R[label_inner].pixels.end(); items++){
                 sum_inner += (unsigned int)img_input.at<uchar>(*items);
             }
             u2 = sum_inner/N2;
@@ -1361,41 +1434,54 @@ int main(){
             tr = -N1*log(u1) - N2*log(u2) + (N1+N2)*log(u4);
             //merge
             if(tr < TR_THRESHOLE){
-                temp_inner_1.rect.x = temp_inner.rect.x;
-                temp_inner_1.rect.y = temp_inner.rect.y;
-                temp_inner_1.rect.width = temp_inner.rect.width + 1;
-                temp_inner_1.rect.height = temp_inner.rect.height + 1;
+                temp_inner_1.rect.x = R[label_inner].rect.x;
+                temp_inner_1.rect.y = R[label_inner].rect.y;
+                temp_inner_1.rect.width = R[label_inner].rect.width + 1;
+                temp_inner_1.rect.height = R[label_inner].rect.height + 1;
                 // add will merged region neghobrs
                 for ( auto a = R.cbegin(); a != R.cend(); a++ ){
                     if(a->first==label_inner){
                         continue;
                     }
                     if((temp_inner_1.rect & a->second.rect).area()!=0){
-                        temp_neghbors.push_back(a->first);
+                        if(R[a->first].processed!=1){
+                            temp_neghbors.push_back(a->first);
+                        }
+                        if(R[a->first].merged!=1){
+                            temp_neghbors.push_back(a->first);
+                        }
                     }
                 }
 
                 //merge pixel to outer loop label
-                for(auto items = temp_inner.pixels.begin(); items!= temp_inner.pixels.end(); items++){
-                    temp.pixels.push_back(*items);
+                for(auto items = R[label_inner].pixels.begin(); items!= R[label_inner].pixels.end(); items++){
+                    R[label].pixels.push_back(*items);
                 }
-                temp_inner.parent_label = label;
-                processed.push_back(label_inner);
+                R[label_inner].parent_label = label;
+                R[label_inner].merged = 1;
+                R[label_inner].processed = 1;
+
+                merged.push_back(label_inner);
                 total_label.remove(label_inner);
                 temp_neghbors.remove(label_inner);
 
                 //update outer region parmaters
-                N1 = temp.pixels.size();
+                N1 = R[label].pixels.size();
                 sum = 0;
-                for(auto items = temp.pixels.begin(); items!= temp.pixels.end(); items++){
+                for(auto items = R[label].pixels.begin(); items!= R[label].pixels.end(); items++){
                     sum += (unsigned int)img_input.at<uchar>(*items);
                 }
                 u1 = sum/N1;
+                total_label.remove(label_inner);
             }else{
                 temp_neghbors.remove(label_inner);
             }
         }
         processed.push_back(label_inner);
+        cout<<"label is ==="<<label<<" label elements is ====="<<R[label].pixels.size()<<endl;
+        R[label].processed = 1;
+        R[label].merged = 1;
+//        cout<<"temp label is ==="<<label<<" label elements is ====="<<temp.pixels.size()<<endl;
         total_label.remove(label);
     }
 
@@ -1461,9 +1547,57 @@ int main(){
 //        }
 //    }
 
+    multimap<int, int, CmpByKeyLength> final_data;
     show_space();
+    int total_merged_val = 0;
     for(auto iElem=main_label.begin(); iElem!=main_label.end();iElem++){
-        cout<<"the pixel value is ===" << *iElem<<endl;
+        cout<<"the pixel value is ===" << *iElem<< " and the pixel size is ==="<<R[*iElem].pixels.size()<<endl;
+        total_merged_val += R[*iElem].pixels.size();
+        final_data.insert(make_pair(R[*iElem].pixels.size(),*iElem));
     }
+
+    for (auto iter = final_data.begin(); iter != final_data.end(); ++iter) {
+        cout << iter->first <<" ----- "<< iter->second << endl;
+    }
+
+//    cout << total_merged_val;
+//    visualize2(img_input, R, main_label);
+    auto iter = final_data.begin();
+    iter++;
+    int label_2 = iter->second;
+    cv::Mat visual_mat(img_input.size(), img_input.type());
+    init_mat2(visual_mat);
+    for(auto iter_pixs=R[label_2].pixels.begin();iter_pixs!=R[label_2].pixels.end();iter_pixs++){
+        visual_mat.at<uchar>(*iter_pixs) = img_input.at<uchar>(*iter_pixs);
+    }
+
+    iter++;
+    label_2 = iter->second;
+    for(auto iter_pixs=R[label_2].pixels.begin();iter_pixs!=R[label_2].pixels.end();iter_pixs++){
+        visual_mat.at<uchar>(*iter_pixs) = img_input.at<uchar>(*iter_pixs);
+    }
+
+    iter++;
+    label_2 = iter->second;
+    for(auto iter_pixs=R[label_2].pixels.begin();iter_pixs!=R[label_2].pixels.end();iter_pixs++){
+        visual_mat.at<uchar>(*iter_pixs) = img_input.at<uchar>(*iter_pixs);
+    }
+
+//    iter++;
+//    iter++;
+//    iter++;
+//    iter++;
+//    label_2 = iter->second;
+//    for(auto iter_pixs=R[label_2].pixels.begin();iter_pixs!=R[label_2].pixels.end();iter_pixs++){
+//        visual_mat.at<uchar>(*iter_pixs) = img_input.at<uchar>(*iter_pixs);
+//    }
+//    iter++;
+//    label_2 = iter->second;
+//    for(auto iter_pixs=R[label_2].pixels.begin();iter_pixs!=R[label_2].pixels.end();iter_pixs++){
+//        visual_mat.at<uchar>(*iter_pixs) = img_input.at<uchar>(*iter_pixs);
+//    }
+
+    cv::imshow( "Initial Segmentation Result", visual_mat );
+    cv::waitKey( 0 );
     return 0;
 }
